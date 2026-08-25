@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recipe-scale"
+version = "0.1.0"
+description = "Scale ingredient quantities in a recipe text file from the command line"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "amiller39" }]
+
+[project.scripts]
+recipe-scale = "recipe_scale.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["recipe_scale*"]
