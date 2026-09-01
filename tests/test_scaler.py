@@ -2,6 +2,7 @@ import unittest
 from fractions import Fraction
 
 from recipe_scale.scaler import (
+    convert_leading_unit,
     format_quantity,
     parse_number,
     scale_factor,
@@ -81,6 +82,57 @@ class ScaleRecipeTests(unittest.TestCase):
         text = "Pancakes\n2 cups flour\n1 1/2 tsp salt\nmilk to taste"
         expected = "Pancakes\n4 cups flour\n3 tsp salt\nmilk to taste"
         self.assertEqual(scale_recipe(text, Fraction(2)), expected)
+
+
+class ConvertLeadingUnitTests(unittest.TestCase):
+    def test_tsp_rolls_up_to_tbsp(self):
+        quantity, rest = convert_leading_unit(Fraction(3), "tsp salt")
+        self.assertEqual(quantity, Fraction(1))
+        self.assertEqual(rest, "tbsp salt")
+
+    def test_tbsp_rolls_up_to_cup(self):
+        quantity, rest = convert_leading_unit(Fraction(16), "tbsp butter")
+        self.assertEqual(quantity, Fraction(1))
+        self.assertEqual(rest, "cup butter")
+
+    def test_stays_in_tsp_when_small(self):
+        quantity, rest = convert_leading_unit(Fraction(2), "tsp vanilla")
+        self.assertEqual(quantity, Fraction(2))
+        self.assertEqual(rest, "tsp vanilla")
+
+    def test_cup_stays_cup_when_already_largest(self):
+        quantity, rest = convert_leading_unit(Fraction(2), "cups flour")
+        self.assertEqual(quantity, Fraction(2))
+        self.assertEqual(rest, "cups flour")
+
+    def test_unrecognized_unit_passes_through(self):
+        quantity, rest = convert_leading_unit(Fraction(3), "cloves garlic")
+        self.assertEqual(quantity, Fraction(3))
+        self.assertEqual(rest, "cloves garlic")
+
+    def test_singular_at_exactly_one(self):
+        quantity, rest = convert_leading_unit(Fraction(48), "tsp flour")
+        self.assertEqual(quantity, Fraction(1))
+        self.assertEqual(rest, "cup flour")
+
+
+class ScaleLineConvertUnitsTests(unittest.TestCase):
+    def test_convert_units_off_by_default(self):
+        self.assertEqual(
+            scale_line("1 1/2 tsp salt", Fraction(2)), "3 tsp salt"
+        )
+
+    def test_convert_units_on(self):
+        self.assertEqual(
+            scale_line("1 1/2 tsp salt", Fraction(2), convert_units=True),
+            "1 tbsp salt",
+        )
+
+    def test_convert_units_leaves_non_units_alone(self):
+        self.assertEqual(
+            scale_line("2 cloves garlic", Fraction(3), convert_units=True),
+            "6 cloves garlic",
+        )
 
 
 if __name__ == "__main__":

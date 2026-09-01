@@ -27,6 +27,12 @@ def main(argv=None):
         metavar="FROM:TO",
         help="scale from FROM servings to TO servings, e.g. 4:6",
     )
+    parser.add_argument(
+        "--convert-units",
+        action="store_true",
+        help="re-express spoon and cup measures in the most natural unit, "
+        "e.g. 3 tsp becomes 1 tbsp",
+    )
     args = parser.parse_args(argv)
 
     if args.factor is not None:
@@ -44,7 +50,7 @@ def main(argv=None):
             parser.error(str(exc))
 
     text = args.recipe.read()
-    result = scale_recipe(text, factor)
+    result = scale_recipe(text, factor, convert_units=args.convert_units)
     sys.stdout.write(result)
     if not result.endswith("\n"):
         sys.stdout.write("\n")

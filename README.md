@@ -53,6 +53,24 @@ Read from stdin with `-` as the filename.
 
 Lines with no leading number (titles, "salt to taste") are left alone.
 
+Add `--convert-units` to re-express spoon and cup measures in whichever
+unit keeps the number at least 1, instead of leaving it in whatever unit
+the original recipe used:
+
+```
+$ python -m recipe_scale.cli pancakes.txt --factor 2 --convert-units
+Pancakes (serves 4)
+4 cups flour
+1 tbsp salt
+8 tbsp sugar
+4 eggs
+2 1/2 cups milk
+salt to taste
+```
+
+This only understands tsp/tbsp/cup; weights like oz or g are left as-is
+since converting those needs an ingredient's density, not just a ratio.
+
 ## Install
 
 ```

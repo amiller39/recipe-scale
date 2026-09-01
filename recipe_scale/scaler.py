@@ -54,7 +54,7 @@ def scale_factor(current_servings, target_servings):
     return target / current
 
 
-def scale_line(line, factor):
+def scale_line(line, factor, convert_units=False):
     """Scale the leading quantity in one line of recipe text, if it has one."""
     stripped = line.strip()
     if not stripped:
@@ -65,9 +65,67 @@ def scale_line(line, factor):
         return line
     quantity = parse_number(match.group("qty"))
     scaled = quantity * factor
-    return f"{indent}{format_quantity(scaled)} {match.group('rest')}"
+    rest = match.group("rest")
+    if convert_units:
+        scaled, rest = convert_leading_unit(scaled, rest)
+    return f"{indent}{format_quantity(scaled)} {rest}"
 
 
-def scale_recipe(text, factor):
+def scale_recipe(text, factor, convert_units=False):
     """Scale every quantity-bearing line in a multi-line recipe."""
-    return "\n".join(scale_line(line, factor) for line in text.splitlines())
+    return "\n".join(
+        scale_line(line, factor, convert_units=convert_units)
+        for line in text.splitlines()
+    )
+
+
+# Volume units expressed in teaspoons, the common base for conversion.
+# Spoon and cup measures only -- liquid/dry weight units (oz, g) aren't
+# interchangeable without ingredient density, so they're left alone.
+_UNIT_TO_TSP = {
+    "tsp": Fraction(1),
+    "teaspoon": Fraction(1),
+    "teaspoons": Fraction(1),
+    "tbsp": Fraction(3),
+    "tablespoon": Fraction(3),
+    "tablespoons": Fraction(3),
+    "cup": Fraction(48),
+    "cups": Fraction(48),
+}
+
+# Ordered largest to smallest so conversion picks the biggest unit that
+# still gives a quantity of at least 1, e.g. 4 tbsp becomes 1/4 cup only
+# once it reaches a full cup; otherwise it stays in tablespoons.
+_UNIT_STEPS = (
+    ("cup", "cups", Fraction(48)),
+    ("tbsp", "tbsp", Fraction(3)),
+    ("tsp", "tsp", Fraction(1)),
+)
+
+
+def convert_leading_unit(quantity, rest):
+    """Re-express quantity/rest in the most natural spoon-or-cup unit.
+
+    rest is the ingredient text following the quantity, e.g. "tbsp butter".
+    If its first word is a recognized volume unit, returns a new
+    (quantity, rest) pair scaled into whichever of tsp/tbsp/cup keeps the
+    number at least 1. Anything else (weights, "cloves garlic", "eggs")
+    is returned unchanged.
+    """
+    parts = rest.split(maxsplit=1)
+    if not parts:
+        return quantity, rest
+    word = parts[0]
+    tail = parts[1] if len(parts) > 1 else ""
+    tsp_per_unit = _UNIT_TO_TSP.get(word.lower())
+    if tsp_per_unit is None:
+        return quantity, rest
+    tsp_total = quantity * tsp_per_unit
+    for singular, plural, factor in _UNIT_STEPS:
+        converted = tsp_total / factor
+        # tsp is the last, smallest step, so it always matches if nothing
+        # bigger did -- guaranteeing the loop returns.
+        if converted >= 1 or factor == 1:
+            name = singular if converted == 1 else plural
+            new_rest = f"{name} {tail}" if tail else name
+            return converted, new_rest
