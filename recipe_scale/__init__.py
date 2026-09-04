@@ -1,6 +1,7 @@
 """Scale ingredient quantities in a plain text recipe."""
 
 from .scaler import (
+    convert_leading_range,
     convert_leading_unit,
     format_quantity,
     parse_number,
@@ -12,6 +13,7 @@ from .scaler import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "convert_leading_range",
     "convert_leading_unit",
     "format_quantity",
     "parse_number",

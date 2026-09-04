@@ -2,6 +2,7 @@ import unittest
 from fractions import Fraction
 
 from recipe_scale.scaler import (
+    convert_leading_range,
     convert_leading_unit,
     format_quantity,
     parse_number,
@@ -114,6 +115,65 @@ class ConvertLeadingUnitTests(unittest.TestCase):
         quantity, rest = convert_leading_unit(Fraction(48), "tsp flour")
         self.assertEqual(quantity, Fraction(1))
         self.assertEqual(rest, "cup flour")
+
+
+class ScaleLineRangeTests(unittest.TestCase):
+    def test_scales_integer_range(self):
+        self.assertEqual(
+            scale_line("2-3 cloves garlic", Fraction(2)), "4-6 cloves garlic"
+        )
+
+    def test_scales_fraction_range(self):
+        self.assertEqual(
+            scale_line("1/2-3/4 cup broth", Fraction(2)), "1-1 1/2 cup broth"
+        )
+
+    def test_scales_decimal_range(self):
+        self.assertEqual(
+            scale_line("1.5-2 cups stock", Fraction(2)), "3-4 cups stock"
+        )
+
+    def test_preserves_indentation(self):
+        self.assertEqual(scale_line("  2-3 eggs", Fraction(2)), "  4-6 eggs")
+
+    def test_non_range_hyphen_not_mistaken_for_range(self):
+        # "to-taste" isn't a quantity range; the line has no leading number.
+        self.assertEqual(
+            scale_line("salt to-taste", Fraction(2)), "salt to-taste"
+        )
+
+
+class ConvertLeadingRangeTests(unittest.TestCase):
+    def test_range_rolls_up_to_tbsp(self):
+        lo, hi, rest = convert_leading_range(Fraction(3), Fraction(6), "tsp salt")
+        self.assertEqual(lo, Fraction(1))
+        self.assertEqual(hi, Fraction(2))
+        self.assertEqual(rest, "tbsp salt")
+
+    def test_range_stays_small_unit_when_low_end_is_small(self):
+        lo, hi, rest = convert_leading_range(Fraction(2), Fraction(3), "tsp vanilla")
+        self.assertEqual(lo, Fraction(2))
+        self.assertEqual(hi, Fraction(3))
+        self.assertEqual(rest, "tsp vanilla")
+
+    def test_range_unrecognized_unit_passes_through(self):
+        lo, hi, rest = convert_leading_range(Fraction(2), Fraction(3), "cloves garlic")
+        self.assertEqual(lo, Fraction(2))
+        self.assertEqual(hi, Fraction(3))
+        self.assertEqual(rest, "cloves garlic")
+
+
+class ScaleLineRangeConvertUnitsTests(unittest.TestCase):
+    def test_convert_units_on_for_range(self):
+        self.assertEqual(
+            scale_line("1-2 tsp vanilla", Fraction(3), convert_units=True),
+            "1-2 tbsp vanilla",
+        )
+
+    def test_convert_units_off_leaves_range_in_original_unit(self):
+        self.assertEqual(
+            scale_line("1-2 tsp vanilla", Fraction(3)), "3-6 tsp vanilla"
+        )
 
 
 class ScaleLineConvertUnitsTests(unittest.TestCase):

@@ -53,6 +53,17 @@ Read from stdin with `-` as the filename.
 
 Lines with no leading number (titles, "salt to taste") are left alone.
 
+Ranges like `2-3 cloves garlic` scale both ends:
+
+```
+$ echo "2-3 cloves garlic" | python -m recipe_scale.cli - --factor 1.5
+3-4 1/2 cloves garlic
+```
+
+Range ends can be integers, decimals, or simple fractions ("1/2-3/4 cup"),
+but not mixed numbers -- "1 1/2-2" would collide with the space that
+separates the quantity from the ingredient text.
+
 Add `--convert-units` to re-express spoon and cup measures in whichever
 unit keeps the number at least 1, instead of leaving it in whatever unit
 the original recipe used:

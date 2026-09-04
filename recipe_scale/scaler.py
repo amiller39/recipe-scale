@@ -17,6 +17,14 @@ QUANTITY_RE = re.compile(
     r"^(?P<qty>\d+\s+\d+/\d+|\d+/\d+|\d*\.\d+|\d+)\s+(?P<rest>\S.*)$"
 )
 
+# Matches a leading range like "2-3 cloves garlic" or "1/2-3/4 cup broth".
+# Range ends are limited to integers, decimals, and simple fractions --
+# mixed numbers are left out because "1 1/2-2" would collide with the
+# space that separates the quantity from the ingredient text.
+RANGE_RE = re.compile(
+    r"^(?P<lo>\d*\.\d+|\d+/\d+|\d+)-(?P<hi>\d*\.\d+|\d+/\d+|\d+)\s+(?P<rest>\S.*)$"
+)
+
 
 def parse_number(text):
     """Parse a quantity token ("2", "1/2", "1 1/2", "2.5") into a Fraction.
@@ -60,6 +68,16 @@ def scale_line(line, factor, convert_units=False):
     if not stripped:
         return line
     indent = line[: len(line) - len(line.lstrip())]
+
+    range_match = RANGE_RE.match(stripped)
+    if range_match:
+        lo = parse_number(range_match.group("lo")) * factor
+        hi = parse_number(range_match.group("hi")) * factor
+        rest = range_match.group("rest")
+        if convert_units:
+            lo, hi, rest = convert_leading_range(lo, hi, rest)
+        return f"{indent}{format_quantity(lo)}-{format_quantity(hi)} {rest}"
+
     match = QUANTITY_RE.match(stripped)
     if not match:
         return line
@@ -103,6 +121,20 @@ _UNIT_STEPS = (
 )
 
 
+def _unit_and_tail(rest):
+    """Split rest into (tsp_per_unit, tail).
+
+    tsp_per_unit is None if the leading word of rest isn't a recognized
+    volume unit, in which case tail is meaningless and should be ignored.
+    """
+    parts = rest.split(maxsplit=1)
+    if not parts:
+        return None, rest
+    word = parts[0]
+    tail = parts[1] if len(parts) > 1 else ""
+    return _UNIT_TO_TSP.get(word.lower()), tail
+
+
 def convert_leading_unit(quantity, rest):
     """Re-express quantity/rest in the most natural spoon-or-cup unit.
 
@@ -112,12 +144,7 @@ def convert_leading_unit(quantity, rest):
     number at least 1. Anything else (weights, "cloves garlic", "eggs")
     is returned unchanged.
     """
-    parts = rest.split(maxsplit=1)
-    if not parts:
-        return quantity, rest
-    word = parts[0]
-    tail = parts[1] if len(parts) > 1 else ""
-    tsp_per_unit = _UNIT_TO_TSP.get(word.lower())
+    tsp_per_unit, tail = _unit_and_tail(rest)
     if tsp_per_unit is None:
         return quantity, rest
     tsp_total = quantity * tsp_per_unit
@@ -129,3 +156,25 @@ def convert_leading_unit(quantity, rest):
             name = singular if converted == 1 else plural
             new_rest = f"{name} {tail}" if tail else name
             return converted, new_rest
+
+
+def convert_leading_range(lo, hi, rest):
+    """Range-aware counterpart to convert_leading_unit.
+
+    Converts both ends of a lo-hi range into the same spoon-or-cup unit,
+    picked so the smaller end reads at least 1 in that unit -- otherwise a
+    range like "4-6 tsp" could come out as "1 1/3-2 tbsp", mixing a clean
+    number with an awkward one.
+    """
+    tsp_per_unit, tail = _unit_and_tail(rest)
+    if tsp_per_unit is None:
+        return lo, hi, rest
+    tsp_lo = lo * tsp_per_unit
+    tsp_hi = hi * tsp_per_unit
+    for singular, plural, factor in _UNIT_STEPS:
+        converted_lo = tsp_lo / factor
+        if converted_lo >= 1 or factor == 1:
+            converted_hi = tsp_hi / factor
+            name = singular if converted_lo == 1 and converted_hi == 1 else plural
+            new_rest = f"{name} {tail}" if tail else name
+            return converted_lo, converted_hi, new_rest
